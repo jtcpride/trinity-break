@@ -99,6 +99,7 @@ export class Input {
       attack: this.isHeld("attack"),
       dashHeld: this.isHeld("dash"),
       jump: this.pulses.has("jump"),
+      jumpHeld: this.isHeld("jump"),
       skill: this.pulses.has("skill"),
       dash: this.pulses.has("dash"),
       overdrive: this.pulses.has("overdrive"),

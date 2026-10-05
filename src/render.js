@@ -9,10 +9,38 @@ const hash = (n) => {
   return x - Math.floor(x);
 };
 const PALETTES = [
-  { sky: "#111c2b", haze: "#644e57", light: "#f5a574", accent: "#fc625f" },
-  { sky: "#071526", haze: "#1c5265", light: "#65d5ff", accent: "#4fd9ff" },
-  { sky: "#181c28", haze: "#6e5741", light: "#ffd38a", accent: "#f3bf58" },
-  { sky: "#120f22", haze: "#54445b", light: "#e9a0f1", accent: "#bd9bff" },
+  {
+    sky: "#479ccc",
+    haze: "#d3eff3",
+    light: "#fff2b4",
+    accent: "#ff536e",
+    city: ["#95c8dc", "#649bb7", "#416e91"],
+    edge: "#a8f3f2",
+  },
+  {
+    sky: "#237ca1",
+    haze: "#98e6e4",
+    light: "#baffee",
+    accent: "#4fd9ff",
+    city: ["#78bcbe", "#468d9f", "#2e647d"],
+    edge: "#8bfaf1",
+  },
+  {
+    sky: "#d77660",
+    haze: "#ffe1a9",
+    light: "#fff6bc",
+    accent: "#f3bf58",
+    city: ["#dca88b", "#ab7b83", "#6f607d"],
+    edge: "#ffe4b0",
+  },
+  {
+    sky: "#57528d",
+    haze: "#c59ecb",
+    light: "#f6d2ff",
+    accent: "#bd9bff",
+    city: ["#ad94bd", "#807597", "#4d5378"],
+    edge: "#d6c6ff",
+  },
 ];
 
 /** All artwork is drawn locally, with no downloads, canvas reads or state mutation. */
@@ -32,17 +60,6 @@ export class Renderer {
       h: 60 + hash(i + 80) * 270,
       damage: hash(i + 55),
     }));
-    this.grain = this.makeGrain();
-  }
-  makeGrain() {
-    const tile = document.createElement("canvas");
-    tile.width = tile.height = 160;
-    const g = tile.getContext("2d");
-    for (let i = 0; i < 1600; i++) {
-      g.fillStyle = i % 2 ? "rgba(165,195,210,.075)" : "rgba(0,0,0,.15)";
-      g.fillRect(hash(i) * 160, hash(i + 498) * 160, 1, 1);
-    }
-    return this.ctx.createPattern(tile, "repeat");
   }
   poly(points, fill, stroke, width = 1) {
     const c = this.ctx;
@@ -103,7 +120,13 @@ export class Renderer {
   draw(state, dt = 0) {
     const c = this.ctx;
     this.time = Number.isFinite(state.time) ? state.time : this.time + dt;
-    const cam = state.camera?.x || 0,
+    const zoom = 1.25,
+      viewWidth = W / zoom,
+      cam = clamp(
+        Math.max(state.camera?.x || 0, (state.player?.x || 0) - viewWidth + 80),
+        0,
+        Math.max(0, (state.world?.width || W) - viewWidth),
+      ),
       sector = clamp(state.sector || 0, 0, 3),
       palette = PALETTES[sector];
     c.setTransform(this.canvas.width / W, 0, 0, this.canvas.height / H, 0, 0);
@@ -113,10 +136,13 @@ export class Renderer {
     this.background(cam, sector, palette);
     c.save();
     const shake = Math.min(state.shake || 0, 12);
+    // A closer world view keeps collision-sized actors readable. Anchor the
+    // ground at its existing screen height; all world geometry uses this transform.
     c.translate(
-      -cam + Math.sin(this.time * 81) * shake,
-      Math.cos(this.time * 67) * shake * 0.55,
+      -cam * zoom + Math.sin(this.time * 81) * shake,
+      GROUND_Y * (1 - zoom) + Math.cos(this.time * 67) * shake * 0.55,
     );
+    c.scale(zoom, zoom);
     this.environment(state, cam, palette);
     for (const e of state.enemies || [])
       if (e.hp > 0 && e.x > cam - 250 && e.x < cam + W + 250)
@@ -191,184 +217,126 @@ export class Renderer {
       "center",
     );
   }
-  background(cam, sector, p) {
-    const c = this.ctx,
-      t = this.time;
-    const sky = c.createLinearGradient(0, 0, 0, 590);
+  arcadeBackground(cam, p, sector) {
+    const c = this.ctx;
+    const sky = c.createLinearGradient(0, 0, 0, 550);
     sky.addColorStop(0, p.sky);
-    sky.addColorStop(0.69, p.haze);
-    sky.addColorStop(1, "#172735");
+    sky.addColorStop(1, p.haze);
     c.fillStyle = sky;
     c.fillRect(0, 0, W, H);
-    this.glow(780 - ((cam * 0.025) % 220), 230, 370, p.light, 0.13);
-    // A pale sun behind drifting ash and a fractured orbital ring.
-    const sunX = 935 - cam * 0.018;
-    this.ellipse(sunX, 170, 61, 61, "#dadcc7");
-    this.glow(sunX, 170, 118, p.light, 0.18);
-    c.fillStyle = p.sky;
-    c.globalAlpha = 0.69;
-    c.fillRect(sunX - 68, 150, 137, 15);
-    c.fillRect(sunX - 64, 183, 125, 7);
-    c.globalAlpha = 1;
-    c.save();
-    c.globalAlpha = 0.13;
-    this.line(
-      [
-        [130 - cam * 0.01, -20],
-        [910, 225],
-        [1420, 360],
-      ],
-      "#c6e6e6",
-      17,
+    this.ellipse(
+      980 - cam * 0.015,
+      sector === 2 ? 242 : 151,
+      sector === 3 ? 40 : 57,
+      sector === 3 ? 40 : 57,
+      p.light,
     );
+    // Graphic clouds and clean orbital arcs keep the horizon calm behind action.
+    c.save();
+    c.globalAlpha = 0.58;
+    for (let i = 0; i < 6; i++) {
+      const x =
+        ((((i * 290 - cam * 0.04 + this.time * 3) % 1740) + 1740) % 1740) - 180;
+      this.ellipse(x, 124 + (i % 3) * 52, 99, 14, "#f1fbff");
+      this.ellipse(x + 24, 113 + (i % 3) * 52, 49, 22, "#f1fbff");
+    }
     this.line(
       [
-        [130 - cam * 0.01, -20],
-        [910, 225],
-        [1420, 360],
+        [-120, 34],
+        [535, 123],
+        [1410, 319],
       ],
-      "#e5f5f3",
-      1,
+      "#ecffff",
+      12,
     );
     c.restore();
     for (let layer = 0; layer < 3; layer++) {
-      const factor = 0.07 + layer * 0.075,
-        base = 440 + layer * 30;
+      const factor = 0.06 + layer * 0.075,
+        base = 448 + layer * 26;
       for (let i = 0; i < this.buildings.length; i++) {
         const b = this.buildings[i],
-          bx = b.x - cam * factor - 180;
-        if (bx + b.w < -40 || bx > W + 40) continue;
-        const bh = b.h * (0.68 + layer * 0.22),
-          top = base - bh;
-        c.fillStyle = ["#293342", "#1c2e3c", "#142532"][layer];
+          x = b.x - cam * factor - 180;
+        if (x + b.w < -40 || x > W + 40) continue;
+        const top = base - b.h * (0.55 + layer * 0.18);
         this.poly(
           [
-            [bx, base],
-            [bx, top + 12],
-            [bx + b.w * 0.18, top + 12],
-            [bx + b.w * 0.18, top],
-            [bx + b.w * 0.59, top],
-            [bx + b.w * 0.69, top + (b.damage > 0.55 ? 42 : 0)],
-            [bx + b.w, top + 15],
-            [bx + b.w, base],
+            [x, base],
+            [x, top + 12],
+            [x + 12, top],
+            [x + b.w - 12, top],
+            [x + b.w, top + 12],
+            [x + b.w, base],
           ],
-          c.fillStyle,
+          p.city[layer],
         );
-        c.fillStyle = ["#61717a", "#42606c", "#355364"][layer];
-        c.globalAlpha = 0.24;
-        c.fillRect(bx + 3, top + 19, 2, bh - 19);
-        c.fillRect(bx + b.w * 0.71, top + 44, 2, bh - 44);
+        c.fillStyle = p.edge;
+        c.globalAlpha = 0.28;
+        c.fillRect(x + 5, top + 18, 5, base - top - 18);
         c.globalAlpha = 1;
-        if (i % 5 === 0) {
+        for (let y = top + 26; y < base - 14; y += 36) {
+          c.fillStyle = p.edge;
+          c.fillRect(x + 18, y, Math.max(7, b.w - 34), 4);
+        }
+        if (i % 5 === 0)
           this.line(
             [
-              [bx + b.w * 0.4, top],
-              [bx + b.w * 0.4, top - 39],
+              [x + b.w / 2, top],
+              [x + b.w / 2, top - 27],
             ],
-            "#344452",
-            2,
+            "#658da9",
+            3,
           );
-          this.glow(bx + b.w * 0.4, top - 40, 7, "#fa735d", 0.65);
-        }
-        for (let row = 1; row < Math.floor(bh / 26); row++)
-          for (let col = 1; col < Math.floor(b.w / 13); col++) {
-            if (hash(i * 12 + row * 9 + col) > 0.69) {
-              c.fillStyle = hash(i + row * 3) > 0.8 ? "#c89468" : "#55757c";
-              c.globalAlpha = 0.28 + layer * 0.1;
-              c.fillRect(bx + col * 13, top + row * 26, 3, 7);
-            }
-          }
-        c.globalAlpha = 1;
       }
     }
-    // Receding elevated transit line and broken structural ribs.
     const off = -(cam * 0.3) % 500;
     for (let x = off - 500; x < W + 500; x += 500) {
       this.poly(
         [
-          [x, 349],
-          [x + 490, 337],
-          [x + 490, 362],
-          [x, 373],
+          [x, 369],
+          [x + 490, 355],
+          [x + 490, 380],
+          [x, 394],
         ],
-        "#122530",
+        p.city[2],
+        "#25435f",
+        2,
       );
       this.line(
         [
-          [x, 350],
-          [x + 490, 338],
+          [x, 369],
+          [x + 490, 355],
         ],
-        "#547381",
-        2,
+        p.edge,
+        4,
       );
       this.poly(
         [
-          [x + 70, 367],
-          [x + 111, 366],
-          [x + 124, 531],
-          [x + 55, 531],
+          [x + 74, 390],
+          [x + 109, 389],
+          [x + 123, 550],
+          [x + 56, 550],
         ],
-        "#152b37",
+        p.city[2],
       );
       this.line(
         [
-          [x + 92, 387],
-          [x + 166, 364],
-          [x + 420, 361],
+          [x + 90, 401],
+          [x + 90, 542],
         ],
-        "#203e4a",
-        8,
-      );
-      this.line(
-        [
-          [x + 355, 347],
-          [x + 346, 300],
-          [x + 370, 311],
-        ],
-        "#233b47",
-        4,
+        "#72a1b8",
+        5,
       );
     }
-    const fog = c.createLinearGradient(0, 300, 0, 550);
-    fog.addColorStop(0, "transparent");
-    fog.addColorStop(1, "#45627755");
-    c.fillStyle = fog;
-    c.fillRect(0, 300, W, 250);
-    // Slow clouds, exhaust trails, searchlights.
-    for (let i = 0; i < 5; i++) {
-      const x = ((((i * 307 - cam * 0.11 + t * 3) % 1600) + 1600) % 1600) - 160;
-      c.save();
-      c.globalAlpha = 0.045;
-      this.ellipse(x, 220 + i * 35, 195, 10 + i * 3, "#d5d9dc");
-      c.restore();
-    }
-    c.save();
-    c.globalCompositeOperation = "screen";
-    c.globalAlpha = 0.035;
-    this.poly(
-      [
-        [260 - cam * 0.15, 493],
-        [630 - cam * 0.15, 90],
-        [760 - cam * 0.15, 90],
-      ],
-      "#b7e2ff",
-    );
-    this.poly(
-      [
-        [1020 - cam * 0.06, 510],
-        [770 - cam * 0.06, 95],
-        [870 - cam * 0.06, 95],
-      ],
-      p.light,
-    );
-    c.restore();
+  }
+  background(cam, sector, p) {
+    this.arcadeBackground(cam, p, sector);
     if (sector === 1 || sector === 3) this.facility(cam, sector, p);
   }
   facility(cam, sector, p) {
     const c = this.ctx,
       offset = -(cam * 0.48) % 410;
     const roof = c.createLinearGradient(0, 0, 0, 180);
-    roof.addColorStop(0, "#07121bea");
+    roof.addColorStop(0, "#1636529a");
     roof.addColorStop(1, "transparent");
     c.fillStyle = roof;
     c.fillRect(0, 0, W, 230);
@@ -382,7 +350,7 @@ export class Renderer {
           [x + 37, 532],
           [x + 37, 160],
         ],
-        "#0c1b27",
+        "#284761",
       );
       this.line(
         [
@@ -390,7 +358,7 @@ export class Renderer {
           [x + 74, 141],
           [x + 74, 525],
         ],
-        "#2f4957",
+        "#7491ae",
         3,
       );
       this.poly(
@@ -400,8 +368,8 @@ export class Renderer {
           [x + 377, 94],
           [x + 68, 94],
         ],
-        "#142a36",
-        "#35505b",
+        "#345675",
+        "#7794b0",
       );
       this.line(
         [
@@ -601,105 +569,70 @@ export class Renderer {
   floor(x1, x2, y, p) {
     if (x2 <= x1) return;
     const c = this.ctx;
-    const g = c.createLinearGradient(0, y, 0, H);
-    g.addColorStop(0, "#263846");
-    g.addColorStop(0.15, "#192935");
-    g.addColorStop(1, "#07131e");
-    c.fillStyle = g;
+    c.fillStyle = "#22394f";
     c.fillRect(x1, y, x2 - x1, H - y);
-    c.fillStyle = "#3b5563";
-    c.fillRect(x1, y, x2 - x1, 5);
-    c.fillStyle = "#091820";
-    c.fillRect(x1, y + 6, x2 - x1, 6);
+    c.fillStyle = "#456881";
+    c.fillRect(x1, y + 9, x2 - x1, 65);
+    c.fillStyle = "#172b42";
+    c.fillRect(x1, y + 75, x2 - x1, H - y - 75);
     this.line(
       [
         [x1, y],
         [x2, y],
       ],
-      "#8ca7ac",
-      1,
+      "#d3f2f5",
+      3,
+    );
+    this.line(
+      [
+        [x1, y + 5],
+        [x2, y + 5],
+      ],
+      p.edge,
+      3,
     );
     c.save();
     c.beginPath();
-    c.rect(x1, y, x2 - x1, H - y);
+    c.rect(x1, y + 9, x2 - x1, H - y);
     c.clip();
-    for (let x = Math.floor(x1 / 160) * 160; x < x2 + 160; x += 160) {
+    for (let x = Math.floor(x1 / 190) * 190; x < x2; x += 190) {
+      this.poly(
+        [
+          [x + 10, y + 19],
+          [x + 168, y + 19],
+          [x + 176, y + 62],
+          [x + 17, y + 62],
+        ],
+        "#35546e",
+        "#7690a4",
+        1.5,
+      );
       this.line(
         [
-          [x, y + 17],
-          [x + 25, H],
+          [x + 28, y + 28],
+          [x + 147, y + 28],
         ],
-        "#0a1923",
+        "#93b7c7",
         2,
       );
       this.line(
         [
-          [x + 2, y + 17],
-          [x + 27, H],
+          [x + 8, y + 83],
+          [x + 17, H],
         ],
-        "#314551",
-        0.7,
+        "#35536e",
+        2,
       );
       this.poly(
         [
-          [x + 16, y + 21],
-          [x + 132, y + 21],
-          [x + 140, y + 64],
-          [x + 22, y + 64],
+          [x + 26, y + 11],
+          [x + 35, y + 11],
+          [x + 26, y + 16],
+          [x + 17, y + 16],
         ],
-        "#1a2d3a",
-        "#2b414f",
+        "#ffdb83",
       );
-      this.line(
-        [
-          [x + 30, y + 29],
-          [x + 117, y + 29],
-        ],
-        "#48606b",
-        1,
-      );
-      c.fillStyle = "#c09e62";
-      for (let k = 0; k < 3; k++)
-        this.poly(
-          [
-            [x + 20 + k * 12, y + 8],
-            [x + 26 + k * 12, y + 8],
-            [x + 21 + k * 12, y + 12],
-            [x + 15 + k * 12, y + 12],
-          ],
-          "#947d50",
-        );
-      c.fillStyle = "#66828d";
-      c.fillRect(x + 23, y + 23, 2, 2);
-      c.fillRect(x + 129, y + 59, 2, 2);
-      if (hash(x) > 0.5)
-        this.line(
-          [
-            [x + 95, y + 92],
-            [x + 81, y + 112],
-            [x + 110, y + 124],
-            [x + 99, y + 161],
-          ],
-          "#0a1620",
-          1.5,
-        );
     }
-    this.line(
-      [
-        [x1, y + 82],
-        [x2, y + 82],
-      ],
-      "#344957",
-      1,
-    );
-    this.line(
-      [
-        [x1, y + 84],
-        [x2, y + 84],
-      ],
-      "#091a25",
-      3,
-    );
     c.restore();
   }
   platform(b, p) {
@@ -898,6 +831,40 @@ export class Renderer {
       c.restore();
     }
   }
+  heroPose(p) {
+    const index = p.character || 0,
+      scale = (p.h || 68) / 100;
+    const moving = Math.abs(p.vx || 0) > 15,
+      jump = !p.grounded;
+    const attack = (p.attackTime || 0) > 0;
+    const stride = Math.sin(this.time * (index === 2 ? 20 : 16));
+    const boost = p.dashTime > 0 || p.boostTime > 0;
+    return {
+      scale,
+      angle: p.wire
+        ? -0.22
+        : attack || p.magnetic
+          ? 0
+          : boost
+            ? 0.18
+            : moving
+              ? 0.075
+              : 0,
+      bob:
+        moving && !jump && !attack && !p.magnetic ? -Math.abs(stride) * 2 : 0,
+    };
+  }
+  heroPoint(p, x, y) {
+    const { scale, angle, bob } = this.heroPose(p);
+    const cos = Math.cos(angle),
+      sin = Math.sin(angle);
+    const px = (x * cos - (y + bob) * sin) * scale;
+    const py = (x * sin + (y + bob) * cos) * scale;
+    return [
+      p.x + (p.facing || 1) * px,
+      p.y + (p.magnetic ? -(p.h || 68) - py : py),
+    ];
+  }
   connections(s) {
     const c = this.ctx,
       p = s.player;
@@ -911,7 +878,7 @@ export class Renderer {
         c.lineDashOffset = -this.time * 35;
         this.line(
           [
-            [p.x + 12, p.y - 46],
+            this.heroPoint(p, 26, -59),
             [p.x + 65, p.y - 90],
             [drone.x, drone.y - 18],
           ],
@@ -935,27 +902,10 @@ export class Renderer {
         ax = wire.anchorX ?? wire.toX,
         ay = wire.anchorY ?? wire.toY;
       if (Number.isFinite(ax) && Number.isFinite(ay)) {
+        this.line([this.heroPoint(p, 24, -91), [ax, ay]], "#f7bf46", 4);
+        this.line([this.heroPoint(p, 24, -91), [ax, ay]], "#fff5c8", 1.2);
         this.line(
-          [
-            [p.x + 13 * p.facing, p.y - 44],
-            [ax, ay],
-          ],
-          "#f7bf46",
-          4,
-        );
-        this.line(
-          [
-            [p.x + 13 * p.facing, p.y - 44],
-            [ax, ay],
-          ],
-          "#fff5c8",
-          1.2,
-        );
-        this.line(
-          [
-            [p.x - 8 * p.facing, p.y - 33],
-            [ax - 5, ay + 8],
-          ],
+          [this.heroPoint(p, -24, -80), [ax - 5, ay + 8]],
           "#f9d775aa",
           1.5,
         );
@@ -974,594 +924,518 @@ export class Renderer {
   }
   hero(p, s, ghost = false) {
     const c = this.ctx,
-      index = p.character || 0,
-      color =
-        CHARACTERS[index]?.color || ["#ff626b", "#48cfff", "#efbf5a"][index];
+      index = p.character || 0;
+    const color = ["#ff4963", "#328eff", "#ffd04d"][index];
+    const shade = ["#a9264b", "#2453a2", "#bf842a"][index];
+    const ink = "#152239",
+      skin = "#ffd6b8",
+      hair = "#162032";
     const moving = Math.abs(p.vx || 0) > 15,
-      running = Math.sin(this.time * (index === 2 ? 19 : 15)),
       jump = !p.grounded;
+    const phase = this.time * (index === 2 ? 20 : 16),
+      stride = Math.sin(phase);
     const attack = (p.attackTime || 0) > 0,
-      skill = (p.skillTime || 0) > 0,
-      boost = p.dashTime > 0 || p.boostTime > 0;
+      skill = (p.skillTime || 0) > 0;
+    const wire = !!p.wire,
+      hack = index === 1 && (skill || !!s.possession);
+    const boost = p.dashTime > 0 || p.boostTime > 0;
+    const pose = this.heroPose(p);
+    const attackHand = [
+      26 / pose.scale - 26,
+      (p.magnetic ? 39 - (p.h || 68) : -39) / pose.scale,
+    ];
     if (!ghost) {
-      this.ellipse(p.x, (s.world?.groundY || 550) + 2, 24, 5, "#020a1390");
+      this.ellipse(
+        p.x,
+        p.grounded ? p.y + 3 : (s.world?.groundY || 550) + 3,
+        25 * pose.scale,
+        5 * pose.scale,
+        "#18345250",
+      );
       if (boost || p.overdrive > 0) {
         c.save();
-        c.globalAlpha = boost ? 0.14 : 0.06;
-        for (let i = 1; i <= 3; i++) {
+        c.globalAlpha = 0.18;
+        for (let i = 3; i > 0; i--) {
           c.save();
-          c.translate(-p.facing * i * 16, 0);
+          c.translate(-(p.facing || 1) * i * 20, 0);
           this.hero(p, s, true);
           c.restore();
         }
         c.restore();
-        this.glow(p.x, p.y - 38, 75, color, 0.18);
-        this.poly(
+        this.line(
           [
-            [p.x - 8 * p.facing, p.y - 38],
-            [p.x - 70 * p.facing, p.y - 23],
-            [p.x - 40 * p.facing, p.y - 38],
-            [p.x - 95 * p.facing, p.y - 44],
-            [p.x - 10 * p.facing, p.y - 49],
+            [p.x - (p.facing || 1) * 40, p.y - (p.h || 68) * 0.55],
+            [p.x - (p.facing || 1) * 98, p.y - (p.h || 68) * 0.55],
           ],
-          color + "88",
+          color,
+          4,
         );
       }
-      if (p.overdrive > 0) {
-        this.ellipse(p.x, p.y - 38, 41, 52, null, "#ba9aff80", 2);
-        this.glow(p.x, p.y - 38, 80, "#b787ff", 0.22);
-      }
+      if (p.overdrive > 0)
+        this.ellipse(
+          p.x,
+          p.y - (p.h || 68) / 2,
+          40 * pose.scale,
+          53 * pose.scale,
+          null,
+          "#e7a0ff",
+          3,
+        );
     }
     c.save();
-    c.translate(
-      p.x,
-      p.y +
-        (moving && !jump
-          ? Math.abs(running) * 1.3
-          : Math.sin(this.time * 2.8) * 0.5),
-    );
+    c.translate(p.x, p.y);
     c.scale(p.facing || 1, 1);
     if (p.magnetic) {
       c.translate(0, -(p.h || 68));
       c.scale(1, -1);
-      this.glow(0, 0, 23, "#58d8ff", 0.4);
       this.line(
         [
-          [-14, 0],
-          [17, 0],
+          [-17, 0],
+          [19, 0],
         ],
-        "#a2f5ff",
-        2,
+        "#c7ffff",
+        4,
       );
     }
     if (p.invulnerable > 0 && !s.possession && p.overdrive <= 0 && !ghost)
-      c.globalAlpha *= 0.7 + Math.sin(this.time * 48) * 0.2;
-    if (boost) c.rotate(0.17);
-    else if (moving) c.rotate(0.055);
-    else if (p.wire) c.rotate(-0.27);
-    const armour = ["#a82f3d", "#185477", "#ad7b2c"][index],
-      light = ["#e95a63", "#3eabd2", "#e0b859"][index],
-      dark = "#101e2a",
-      skin = "#d7ae96",
-      skinShadow = "#a97d70";
-    // Hair silhouette has a distinct profile for each sister, including animated ponytails.
-    if (index > 0) {
-      const hair = index === 1 ? "#14283f" : "#9e6d2c",
-        hi = index === 1 ? "#3c627b" : "#e2b75e";
+      c.globalAlpha *= 0.88 + Math.sin(this.time * 48) * 0.1;
+    // Match the simulation height after attaching magnetic feet to the collider top.
+    c.scale(pose.scale, pose.scale);
+    c.rotate(pose.angle);
+    c.translate(0, pose.bob);
+    // Large dark hair silhouettes preserve the supplied three character identities.
+    const flow = Math.sin(this.time * 9) * 3 + (moving || jump ? 12 : 0);
+    if (index === 0) {
       c.beginPath();
-      c.moveTo(-5, -79);
-      c.bezierCurveTo(
-        -21,
-        -91,
-        -27 - Math.abs(p.vx || 0) * 0.025,
-        -76 + running * 3,
-        -36,
-        -66 + Math.sin(this.time * 9) * 4,
-      );
-      c.bezierCurveTo(-24, -69, -12, -60, -7, -74);
+      c.moveTo(-9, -92);
+      c.bezierCurveTo(-27, -108, -30 - flow, -73, -43 - flow, -68);
+      c.bezierCurveTo(-22 - flow, -58, -21, -81, -7, -82);
+      c.closePath();
       c.fillStyle = hair;
       c.fill();
+      c.strokeStyle = ink;
+      c.lineWidth = 2.5;
+      c.stroke();
       this.line(
         [
-          [-7, -79],
-          [-18, -79 + running],
-          [-31, -69 + running * 3],
+          [-12, -90],
+          [-21, -86],
+          [-32 - flow, -70],
         ],
-        hi,
-        1.1,
+        "#465374",
+        2,
       );
-      this.ellipse(-8, -78, 3, 3, light, dark);
+      this.ellipse(-10, -92, 5, 4, color, ink, 2);
+    } else if (index === 2) {
+      this.poly(
+        [
+          [-10, -90],
+          [-19, -81],
+          [-22 - flow, -66],
+          [-34 - flow, -55],
+          [-16, -55],
+          [-6, -72],
+          [7, -72],
+        ],
+        hair,
+        ink,
+        2.5,
+      );
+      this.line(
+        [
+          [-12, -80],
+          [-19 - flow, -64],
+          [-28 - flow, -59],
+        ],
+        "#465374",
+        2,
+      );
+    } else {
+      this.poly(
+        [
+          [-11, -92],
+          [-17, -82],
+          [-16, -66],
+          [-9, -62],
+          [-4, -73],
+          [11, -71],
+          [12, -88],
+        ],
+        hair,
+        ink,
+        2.5,
+      );
     }
-    // Rear arm, shoulder pauldron and compact propulsion pack.
+    const limb = (a, b, width, fill) => this.limb(...a, ...b, width, fill, ink);
+    const rearHand = wire
+      ? [-24, -80]
+      : hack
+        ? [-6, -54]
+        : attack
+          ? [attackHand[0] - 3, attackHand[1] + 2]
+          : moving
+            ? [-20 - stride * 10, -47 + stride * 7]
+            : [-15, -39];
+    limb([-9, -64], [-18, -52], 4.2, index === 2 ? shade : skin);
+    limb([-18, -52], rearHand, 4, shade);
+    this.ellipse(...rearHand, 4, 4, ink);
+    // Long clean leg shapes: RED shorts and bare thighs; BLUE pants; GOLD full suit.
+    const legs = jump
+      ? [
+          [-15, -27, -24, -11],
+          [19, -31, 8, -14],
+        ]
+      : moving
+        ? [
+            [
+              -7 - stride * 14,
+              -22,
+              -8 + stride * 20,
+              -Math.max(0, stride) * 11,
+            ],
+            [7 + stride * 14, -22, 8 - stride * 20, -Math.max(0, -stride) * 11],
+          ]
+        : [
+            [-10, -21, -13, 0],
+            [9, -21, 13, 0],
+          ];
+    for (let n = 0; n < 2; n++) {
+      const [kx, ky, fx, fy] = legs[n],
+        fill = n === 0 ? shade : color;
+      limb([n ? 6 : -6, -42], [kx, ky], 5.2, index === 0 ? skin : fill);
+      if (index === 2)
+        this.line(
+          [
+            [n ? 10 : -10, -40],
+            [kx + 3, ky],
+          ],
+          ink,
+          3,
+        );
+      limb([kx, ky], [fx, fy - 5], 4.5, index === 0 ? fill : ink);
+      this.ellipse(kx, ky, 5.5, 4, index === 0 ? fill : ink, ink, 1.5);
+      this.poly(
+        [
+          [fx - 5, fy - 9],
+          [fx + 4, fy - 9],
+          [fx + 6, fy - 4],
+          [fx + 13, fy - 3],
+          [fx + 13, fy + 1],
+          [fx - 5, fy + 1],
+        ],
+        ink,
+        ink,
+        2,
+      );
+      this.line(
+        [
+          [fx - 3, fy - 2],
+          [fx + 10, fy - 2],
+        ],
+        index === 1 ? "#70efff" : color,
+        2.5,
+      );
+    }
+    if (index === 0) {
+      this.poly(
+        [
+          [-10, -49],
+          [10, -49],
+          [13, -38],
+          [2, -36],
+          [-1, -41],
+          [-12, -38],
+        ],
+        ink,
+        ink,
+        2,
+      );
+      this.poly(
+        [
+          [-8, -57],
+          [9, -57],
+          [10, -48],
+          [-9, -48],
+        ],
+        skin,
+        ink,
+        2,
+      );
+    } else {
+      this.poly(
+        [
+          [-9, -56],
+          [9, -56],
+          [11, -40],
+          [-10, -40],
+        ],
+        color,
+        ink,
+        2.5,
+      );
+    }
     this.poly(
       [
-        [-11, -63],
-        [-19, -58],
-        [-17, -39],
-        [-11, -37],
-        [-7, -53],
+        [-10, -72],
+        [7, -73],
+        [13, -65],
+        [10, index === 0 ? -57 : -48],
+        [-9, index === 0 ? -57 : -48],
+        [-13, -65],
       ],
-      "#263444",
-      "#09131c",
+      color,
+      ink,
+      2.5,
+    );
+    this.poly(
+      [
+        [-10, -69],
+        [-3, -65],
+        [-4, index === 0 ? -58 : -49],
+        [-10, index === 0 ? -58 : -48],
+      ],
+      shade,
+    );
+    if (index === 2)
+      this.poly(
+        [
+          [-11, -68],
+          [-6, -64],
+          [-6, -51],
+          [-10, -49],
+        ],
+        ink,
+      );
+    this.line(
+      [
+        [3, -69],
+        [4, index === 0 ? -59 : -51],
+      ],
+      "#fff4d6",
+      2,
+    );
+    this.line(
+      [
+        [-10, -46],
+        [10, -46],
+      ],
+      ink,
+      4,
+    );
+    this.poly(
+      [
+        [-2, -48],
+        [3, -48],
+        [3, -44],
+        [-2, -44],
+      ],
+      "#d7e8ef",
+    );
+    limb([0, -75], [1, -70], 3, skin);
+    // Oversized face, bright eye and bangs remain legible at phone scale.
+    this.ellipse(0, -84, 12.5, 13, skin, ink, 2.5);
+    this.poly(
+      [
+        [-13, -85],
+        [-12, -94],
+        [-5, -100],
+        [5, -99],
+        [12, -93],
+        [13, -84],
+        [7, -88],
+        [4, -92],
+        [0, -85],
+        [-3, -92],
+        [-8, -83],
+      ],
+      hair,
+      ink,
+      2,
+    );
+    this.line(
+      [
+        [-7, -94],
+        [4, -97],
+        [10, -92],
+      ],
+      "#495978",
+      2,
+    );
+    if (index !== 0)
+      this.line(
+        [
+          [-10, -93],
+          [-3, -97],
+          [7, -95],
+        ],
+        color,
+        3,
+      );
+    this.ellipse(7, -83, 3.3, 3.8, "#ffffff");
+    this.ellipse(8, -83, 1.7, 2.7, ink);
+    this.line(
+      [
+        [4, -87],
+        [10, -87],
+      ],
+      ink,
       1.5,
     );
     this.line(
       [
-        [-17, -53],
-        [-18, -44],
+        [7, -76],
+        [10, -77],
       ],
-      color,
-      1.2,
-    );
-    const backHandX =
-      index === 2 && skill ? -31 : moving ? -17 - running * 6 : -14;
-    this.limb(-11, -60, -20, -46, 5, armour, dark);
-    this.limb(-20, -46, backHandX, -32, 4, "#243342", dark);
-    this.ellipse(backHandX, -31, 3.5, 4, dark, "#50606b");
-    // Back leg, front leg: separate anatomical joints and strapped thigh armour.
-    const step = moving ? running * 13 : 0;
-    this.leg(
-      -5,
-      -33,
-      -6 - step * 0.75,
-      jump ? -19 : -17,
-      -5 + step,
-      jump ? -7 : -1,
-      armour,
-      light,
-      skinShadow,
-      true,
-    );
-    this.leg(
-      6,
-      -32,
-      8 + step * 0.73,
-      jump ? -23 : -17,
-      8 - step,
-      jump ? -13 : 0,
-      armour,
-      light,
-      skin,
-      false,
-    );
-    // Waist, fitted cropped torso and shoulder straps — human silhouette remains visible.
-    this.poly(
-      [
-        [-9, -48],
-        [-8, -39],
-        [-11, -33],
-        [-2, -29],
-        [11, -33],
-        [8, -43],
-        [10, -50],
-      ],
-      skin,
-      "#392d31",
-      1,
-    );
-    this.poly(
-      [
-        [-12, -63],
-        [-5, -67],
-        [5, -66],
-        [13, -59],
-        [11, -51],
-        [6, -45],
-        [-8, -46],
-        [-13, -55],
-      ],
-      armour,
-      "#080f18",
-      1.6,
-    );
-    this.poly(
-      [
-        [-7, -61],
-        [0, -59],
-        [9, -60],
-        [9, -53],
-        [5, -49],
-        [-6, -50],
-      ],
-      index === 1 ? "#203d52" : "#28313b",
-      "#0e1822",
-    );
-    this.line(
-      [
-        [-8, -62],
-        [-8, -52],
-        [-5, -48],
-      ],
-      light,
+      "#a85062",
       1.3,
     );
-    this.line(
-      [
-        [10, -59],
-        [9, -53],
-        [6, -49],
-      ],
-      light,
-      1.2,
-    );
-    this.line(
-      [
-        [-1, -60],
-        [0, -49],
-      ],
-      "#0b141e",
-      1.3,
-    );
-    this.ellipse(0, -62, 2, 2, color);
-    this.poly(
-      [
-        [-10, -36],
-        [10, -37],
-        [12, -30],
-        [0, -29],
-        [-12, -30],
-      ],
-      "#19202a",
-      "#080f17",
-    );
-    this.line(
-      [
-        [-10, -35],
-        [11, -35],
-      ],
-      "#7c7270",
-      1.3,
-    );
-    c.fillStyle = "#b8a792";
-    c.fillRect(-1, -36, 4, 3);
-    this.poly(
-      [
-        [-11, -31],
-        [-1, -30],
-        [-2, -24],
-        [-10, -24],
-      ],
-      index === 2 ? armour : "#1d242e",
-      "#0c1420",
-    );
-    this.poly(
-      [
-        [0, -30],
-        [12, -31],
-        [13, -24],
-        [3, -23],
-      ],
-      index === 2 ? armour : "#1d242e",
-      "#0c1420",
-    );
-    // Neck and expressive face; goggles/visor stay readable at play size.
-    this.poly(
-      [
-        [-3, -72],
-        [5, -72],
-        [5, -65],
-        [0, -62],
-        [-4, -66],
-      ],
-      skinShadow,
-      "#2d2529",
-    );
-    this.poly(
-      [
-        [-8, -80],
-        [-3, -85],
-        [6, -83],
-        [9, -77],
-        [9, -74],
-        [12, -72],
-        [9, -70],
-        [7, -66],
-        [1, -65],
-        [-5, -70],
-      ],
-      skin,
-      "#392c32",
-      1,
-    );
-    this.poly(
-      [
-        [6, -75],
-        [9, -75],
-        [11, -72],
-        [8, -72],
-      ],
-      "#edc6a8",
-    );
-    this.line(
-      [
-        [4, -68],
-        [8, -69],
-      ],
-      "#743d3c",
-      0.8,
-    );
-    this.line(
-      [
-        [5, -69],
-        [7, -69],
-      ],
-      "#f7d9bd",
-      0.65,
-    );
-    if (index === 0) {
+    const hand = wire
+      ? [24, -91]
+      : attack
+        ? attackHand
+        : hack
+          ? [26, -59]
+          : moving
+            ? [18 + stride * 12, -45 - stride * 8]
+            : [17, -38];
+    const elbow = wire
+      ? [22, -77]
+      : hack
+        ? [17, -51]
+        : attack
+          ? [attackHand[0] - 7, attackHand[1] + 4]
+          : [18, -54];
+    limb([10, -65], elbow, 4.5, index === 2 ? color : skin);
+    limb(elbow, hand, 4.2, index === 1 ? "#2453a2" : shade);
+    this.ellipse(...hand, 4, 4, ink);
+    if (index === 1) {
       this.poly(
         [
-          [-8, -72],
-          [-13, -77],
-          [-11, -83],
-          [-15, -84],
-          [-7, -87],
-          [-8, -93],
-          [-1, -88],
-          [6, -93],
-          [7, -87],
-          [13, -85],
-          [9, -82],
-          [10, -78],
-          [3, -79],
-          [-1, -84],
-          [-4, -75],
+          [hand[0] - 7, hand[1] - 9],
+          [hand[0] + 5, hand[1] - 10],
+          [hand[0] + 8, hand[1] + 3],
+          [hand[0] - 5, hand[1] + 4],
         ],
-        "#7d2433",
-        "#211925",
-        1,
+        ink,
+        "#97f8ff",
+        1.5,
       );
       this.line(
         [
-          [-10, -81],
-          [-4, -86],
-          [0, -85],
+          [hand[0] - 3, hand[1] - 5],
+          [hand[0] + 3, hand[1] - 5],
         ],
-        "#dd6570",
-        1,
-      );
-      this.line(
-        [
-          [0, -86],
-          [6, -87],
-          [9, -84],
-        ],
-        "#d76769",
-        1,
-      );
-      this.poly(
-        [
-          [-3, -77],
-          [8, -78],
-          [10, -74],
-          [3, -72],
-          [-3, -73],
-        ],
-        "#581e2a",
-        "#f26569",
-        1,
-      );
-      this.line(
-        [
-          [2, -76],
-          [7, -76],
-        ],
-        "#ffd2bd",
-        1,
-      );
-      this.line(
-        [
-          [-7, -77],
-          [-3, -76],
-        ],
-        "#2b2330",
+        "#88ffff",
         2,
       );
-    } else {
-      const hair = index === 1 ? "#15253c" : "#916425",
-        hi = index === 1 ? "#427693" : "#e4bf67";
-      this.poly(
-        [
-          [-9, -72],
-          [-11, -79],
-          [-7, -85],
-          [1, -88],
-          [7, -86],
-          [11, -81],
-          [7, -79],
-          [2, -82],
-          [-3, -74],
-          [-5, -69],
-        ],
-        hair,
-        "#1b2030",
-      );
-      this.line(
-        [
-          [-7, -80],
-          [-2, -85],
-          [5, -84],
-        ],
-        hi,
-        1.2,
-      );
-      this.line(
-        [
-          [-5, -77],
-          [-1, -81],
-        ],
-        hi,
-        0.7,
-      );
-      this.poly(
-        [
-          [-2, -77],
-          [10, -77],
-          [9, -73],
-          [0, -72],
-        ],
-        index === 1 ? "#123c5b" : "#664d27",
-        light,
-        1.2,
-      );
-      this.line(
-        [
-          [3, -76],
-          [8, -76],
-        ],
-        index === 1 ? "#b9f4ff" : "#fff0b5",
-        1.3,
-      );
+      if (hack) {
+        this.ellipse(
+          hand[0] + 4,
+          hand[1] - 9,
+          19,
+          19,
+          "#48dfff20",
+          "#8cffff",
+          2,
+        );
+        this.line(
+          [
+            [hand[0] + 4, hand[1] - 20],
+            [hand[0] + 4, hand[1] + 2],
+          ],
+          "#dbffff",
+          1,
+        );
+      }
     }
-    // Foreground arm is aimed, operating a terminal, or presenting wire gauntlets.
-    const shoulder = [9, -60];
-    const hand =
-      index === 1 && (skill || s.possession)
-        ? [24, -49]
-        : attack
-          ? [35, -56]
-          : index === 2 && (skill || p.wire)
-            ? [32, -66]
-            : [20 + (moving ? running * 4 : 0), -34];
-    const elbow = attack
-      ? [22, -52]
-      : index === 2 && (skill || p.wire)
-        ? [21, -56]
-        : [15, -45];
-    this.limb(...shoulder, ...elbow, 5, index === 1 ? skin : armour, dark);
-    this.limb(...elbow, ...hand, 4.2, "#253341", "#0b1420");
-    if (index !== 1)
-      this.poly(
-        [
-          [5, -63],
-          [12, -63],
-          [17, -58],
-          [13, -54],
-          [7, -56],
-        ],
-        armour,
-        light,
-        0.8,
-      );
-    else this.ellipse(10, -59, 4.5, 5.5, skin, "#3b3b42");
-    this.ellipse(hand[0], hand[1], 3.5, 3.5, "#1b2631", "#71858d", 0.8);
-    if (index === 0) {
+    if (index === 2) {
+      this.ellipse(hand[0], hand[1], 6, 5, ink, "#fff0a0", 2);
+      this.ellipse(hand[0], hand[1], 2, 2, color);
+    }
+    if (index === 0 || (attack && !wire)) {
       c.save();
-      c.translate(hand[0], hand[1]);
+      c.translate(...hand);
       if (!attack) c.rotate(0.7);
       this.poly(
         [
-          [-3, -4],
-          [19, -4],
-          [22, -1],
-          [22, 3],
-          [6, 3],
-          [4, 9],
-          [-1, 8],
+          [-3, -6],
+          [21, -6],
+          [26, -2],
+          [26, 3],
+          [5, 3],
+          [3, 10],
+          [-2, 9],
         ],
-        "#273342",
-        "#0a121b",
-        1.5,
-      );
-      c.fillStyle = "#a83f4e";
-      c.fillRect(1, -3, 13, 3);
-      c.fillStyle = "#79919c";
-      c.fillRect(16, -3, 5, 2);
-      this.line(
-        [
-          [3, -6],
-          [9, -6],
-        ],
-        "#151e28",
+        ink,
+        ink,
         2,
       );
-      if (attack) {
-        this.glow(24, 0, 30, "#ffaf61", 0.7);
+      this.line(
+        [
+          [1, -3],
+          [21, -3],
+        ],
+        color,
+        3,
+      );
+      if (attack)
         this.poly(
           [
-            [22, -3],
-            [34, -8],
-            [29, -2],
-            [42, 0],
-            [29, 3],
-            [32, 8],
-            [22, 4],
+            [26, -3],
+            [38, -9],
+            [34, -2],
+            [48, 0],
+            [34, 3],
+            [38, 9],
+            [26, 4],
           ],
-          "#ffdca0",
-        );
-      }
-      c.restore();
-    } else if (index === 1) {
-      c.save();
-      c.translate(hand[0] + 3, hand[1] - 3);
-      c.rotate(-0.35);
-      c.fillStyle = "#183443";
-      c.fillRect(-5, -10, 14, 21);
-      c.strokeStyle = "#76b5c6";
-      c.lineWidth = 1;
-      c.strokeRect(-5, -10, 14, 21);
-      c.fillStyle = "#23748f";
-      c.fillRect(-3, -8, 10, 16);
-      for (let k = 0; k < 4; k++)
-        this.line(
-          [
-            [-1, -5 + k * 3],
-            [5 - (k % 2) * 3, -5 + k * 3],
-          ],
-          "#8febff",
-          0.7,
-        );
-      c.restore();
-      c.beginPath();
-      c.moveTo(hand[0] + 2, hand[1] + 3);
-      c.bezierCurveTo(23, -17, -18, -20, -13, -43);
-      c.strokeStyle = "#4488a3";
-      c.lineWidth = 1;
-      c.stroke();
-      if (attack) {
-        this.glow(hand[0] + 12, hand[1], 18, "#65ddff", 0.55);
-        this.line(
-          [
-            [hand[0] + 4, hand[1]],
-            [hand[0] + 19, hand[1] - 5],
-          ],
-          "#c7f7ff",
+          "#fff6bf",
+          "#ffb64c",
           2,
         );
-      }
-    } else {
-      this.ellipse(hand[0], hand[1], 5, 4, "#70582a", "#f5d886");
-      this.ellipse(backHandX, -31, 5, 4, "#70582a", "#e3bb62");
+      c.restore();
+    }
+    if (index === 0 && skill) {
       this.line(
         [
-          [hand[0], hand[1]],
-          [hand[0] + 7, hand[1] - 2],
+          [21, -77],
+          [41, -63],
+          [39, -44],
         ],
-        "#f1d182",
-        2,
+        "#fff1ad",
+        7,
       );
-      if (attack) {
-        c.beginPath();
-        c.moveTo(hand[0] + 3, hand[1]);
-        c.quadraticCurveTo(50, -66, 69, -36);
-        c.strokeStyle = "#ffe49a";
-        c.lineWidth = 2;
-        c.stroke();
-      }
+      this.line(
+        [
+          [21, -77],
+          [41, -63],
+          [39, -44],
+        ],
+        "#ff6673",
+        3,
+      );
     }
     c.restore();
     if (!ghost && s.mode === "playing") {
-      // Small colored marker locates the selected character without obscuring the art.
       this.poly(
         [
-          [p.x - 4, p.y - 109],
-          [p.x + 4, p.y - 109],
-          [p.x, p.y - 103],
+          [p.x - 4, p.y - (p.h || 68) - 14],
+          [p.x + 4, p.y - (p.h || 68) - 14],
+          [p.x, p.y - (p.h || 68) - 6],
         ],
         color,
+        ink,
+        1.5,
       );
       if (s.possession)
-        this.text("SAFE LINK", p.x, p.y - 116, "#74dcfa", 9, "center");
+        this.text(
+          "SAFE LINK",
+          p.x,
+          p.y - (p.h || 68) - 20,
+          "#93f8ff",
+          10,
+          "center",
+        );
     }
   }
   limb(x1, y1, x2, y2, width, fill, edge) {
@@ -1728,8 +1602,121 @@ export class Renderer {
     }
     c.restore();
   }
+  securityRobot(e) {
+    const c = this.ctx,
+      ink = "#182940",
+      hot = "#ff536a";
+    this.ellipse(e.x, e.y + 3, 23, 5, "#18345250");
+    c.save();
+    c.translate(e.x, e.y);
+    c.scale(e.facing || -1, 1);
+    const walk =
+      Math.abs(e.vx || 0) > 5 ? Math.sin(this.time * 12 + e.x) * 9 : 0;
+    for (const sign of [-1, 1]) {
+      const x = sign * 9,
+        step = walk * sign;
+      this.limb(x, -29, x + step, -15, 4.5, "#547991", ink);
+      this.limb(x + step, -15, x - step, -4, 4.5, "#34516e", ink);
+      this.poly(
+        [
+          [x - step - 7, -7],
+          [x - step + 5, -7],
+          [x - step + 11, -2],
+          [x - step + 11, 1],
+          [x - step - 7, 1],
+        ],
+        ink,
+        ink,
+        2,
+      );
+      this.line(
+        [
+          [x - step - 3, -2],
+          [x - step + 8, -2],
+        ],
+        "#8bc4d7",
+        2,
+      );
+    }
+    this.ellipse(-15, -46, 9, 16, "#34516e", ink, 2.5);
+    this.ellipse(0, -44, 21, 23, "#789aaf", ink, 3);
+    this.poly(
+      [
+        [-15, -49],
+        [15, -49],
+        [13, -34],
+        [0, -28],
+        [-13, -34],
+      ],
+      "#416780",
+    );
+    this.ellipse(0, -43, 7, 7, ink);
+    this.ellipse(0, -43, 4, 4, hot);
+    this.ellipse(0, -70, 17, 15, "#b0c9d5", ink, 3);
+    this.poly(
+      [
+        [-12, -74],
+        [13, -74],
+        [15, -67],
+        [-12, -64],
+      ],
+      ink,
+      ink,
+      2,
+    );
+    this.line(
+      [
+        [-7, -69],
+        [10, -70],
+      ],
+      hot,
+      3,
+    );
+    this.line(
+      [
+        [-9, -79],
+        [6, -80],
+      ],
+      "#e9fbff",
+      2,
+    );
+    const aiming = e.telegraph > 0 || e.attackTime < 0.14;
+    const hand = aiming ? [31, -49] : [25, -32];
+    this.limb(16, -51, 24, -39, 5, "#8aafc4", ink);
+    this.limb(24, -39, ...hand, 4.5, "#496c86", ink);
+    c.save();
+    c.translate(...hand);
+    if (!aiming) c.rotate(0.55);
+    this.poly(
+      [
+        [-4, -6],
+        [23, -6],
+        [27, -2],
+        [27, 4],
+        [3, 5],
+        [0, 10],
+        [-4, 9],
+      ],
+      ink,
+      ink,
+      2,
+    );
+    this.line(
+      [
+        [3, -2],
+        [21, -2],
+      ],
+      hot,
+      2,
+    );
+    c.restore();
+    c.restore();
+    if (e.hp < e.maxHp) this.bar(e.x, e.y - e.h - 28, 44, e.hp / e.maxHp, hot);
+  }
   enemy(e, s) {
     if (e.type === "drone") return this.drone(e, s);
+    if (e.type !== "boss" && e.type !== "sentinel")
+      return this.securityRobot(e);
     const c = this.ctx,
       boss = e.type === "boss",
       sentinel = e.type === "sentinel";
@@ -2441,41 +2428,16 @@ export class Renderer {
     }
   }
   atmosphere(cam, p, s) {
-    const c = this.ctx,
-      t = this.time;
-    for (let i = 0; i < this.stars.length; i++) {
-      const m = this.stars[i],
-        x =
-          (((m.x - cam * (0.06 + (i % 3) * 0.08) + t * (i % 2 ? 9 : -5)) % W) +
-            W) %
-          W,
-        y = (m.y + t * (i % 2 ? -6 : 4) + 720 * 100) % 610;
-      c.globalAlpha = 0.16 + Math.sin(t * 1.3 + i) * 0.1;
-      c.fillStyle = i % 3 ? "#9cbbcc" : p.light;
-      c.fillRect(x, y, m.r || 1, (m.r || 1) * 2.5);
-    }
-    c.globalAlpha = 1;
-    const v = c.createRadialGradient(640, 365, 160, 640, 365, 770);
-    v.addColorStop(0, "transparent");
-    v.addColorStop(0.65, "#050c1310");
-    v.addColorStop(1, "#020711cc");
-    c.fillStyle = v;
+    if (!(s.player?.hp < s.player?.maxHp * 0.25 && s.mode === "playing"))
+      return;
+    const c = this.ctx;
+    const danger = c.createRadialGradient(640, 360, 350, 640, 360, 740);
+    danger.addColorStop(0, "transparent");
+    danger.addColorStop(1, "#ff304340");
+    c.save();
+    c.fillStyle = danger;
+    c.globalAlpha = 0.65 + Math.sin(this.time * 4) * 0.25;
     c.fillRect(0, 0, W, H);
-    const lower = c.createLinearGradient(0, 604, 0, H);
-    lower.addColorStop(0, "transparent");
-    lower.addColorStop(1, "#030b14c0");
-    c.fillStyle = lower;
-    c.fillRect(0, 604, W, 116);
-    c.fillStyle = this.grain;
-    c.fillRect(0, 0, W, H);
-    if (s.player?.hp < s.player?.maxHp * 0.25 && s.mode === "playing") {
-      const danger = c.createRadialGradient(640, 360, 350, 640, 360, 740);
-      danger.addColorStop(0, "transparent");
-      danger.addColorStop(1, "#ff304340");
-      c.fillStyle = danger;
-      c.globalAlpha = 0.65 + Math.sin(t * 4) * 0.25;
-      c.fillRect(0, 0, W, H);
-      c.globalAlpha = 1;
-    }
+    c.restore();
   }
 }

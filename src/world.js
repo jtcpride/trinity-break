@@ -43,7 +43,7 @@ export const SECTORS = [
     end: 1900,
     checkpointX: 150,
     objective: "REDの銃撃で赤い強化隔壁を破壊する",
-    hint: "1：RED ／ J：射撃 ／ K：近接ブレイク ／ Shift・L：連続ブースト。",
+    hint: "Space短押しで小跳び、長押しで高く。空中でもJで射撃。1：RED ／ K：ブレイク。",
     story:
       "軌道都市ノクスの夜が止まった。戦術部隊A.O.T.U.の三姉妹は、市民を拘束する中枢塔へ向かう。",
   },
@@ -88,6 +88,7 @@ export function createWorld() {
     width: WORLD_WIDTH,
     groundY: GROUND_Y,
     platforms: [
+      { x: 570, y: 460, w: 130, h: 18 },
       { x: 1040, y: 438, w: 170, h: 18 },
       { x: 2770, y: 438, w: 240, h: 18 },
       { x: 4220, y: 440, w: 250, h: 18 },
@@ -131,6 +132,13 @@ export function createWorld() {
       { id: "blue-relay", x: 3230, y: 370, w: 42, h: 56, active: false },
     ],
     pickups: [
+      {
+        id: "outer-air-energy",
+        x: 1125,
+        y: 396,
+        kind: "energy",
+        collected: false,
+      },
       { id: "outer-health", x: 1440, y: 510, kind: "health", collected: false },
       {
         id: "signal-energy",
@@ -227,6 +235,7 @@ export function createEnemies() {
   return [
     enemy("outer-01", "trooper", 740, GROUND_Y),
     enemy("outer-02", "trooper", 1200, GROUND_Y),
+    enemy("outer-flier", "drone", 1330, 405, { hackable: true }),
     enemy("blue-drone", "drone", 2470, 380, { tutorial: true, hackable: true }),
     enemy("signal-guard", "trooper", 2970, GROUND_Y),
     enemy("sky-patrol", "trooper", 4470, GROUND_Y),

@@ -3,9 +3,9 @@
   --bg: #070b12;
   --ink: #ecf4f8;
   --muted: #8b9cab;
-  --red: #ff5360;
-  --blue: #49baff;
-  --gold: #ffc859;
+  --red: #ff5473;
+  --blue: #53d0ff;
+  --gold: #ffce62;
   --accent: var(--red);
 }
 * {
@@ -102,25 +102,25 @@ canvas {
   display: flex;
   transform: skew(-7deg);
   overflow: hidden;
-  opacity: 0.86;
+  opacity: 1;
 }
 .art-panel {
   width: 34%;
   height: 100%;
-  background-image: url("assets/roster.png");
-  background-size: auto 190%;
+  background-image: url("assets/portraits.svg#red");
+  background-size: 100% 100%;
   background-repeat: no-repeat;
   border-left: 1px solid #c5e6ff30;
-  filter: saturate(0.88);
+  filter: saturate(1.08);
 }
 .art-red {
-  background-position: 11% -4cqw;
+  background-image: url("assets/portraits.svg#red");
 }
 .art-blue {
-  background-position: 50% -17cqw;
+  background-image: url("assets/portraits.svg#blue");
 }
 .art-gold {
-  background-position: 87% -7cqw;
+  background-image: url("assets/portraits.svg#gold");
 }
 .title-art:after {
   content: "";
@@ -179,8 +179,11 @@ h1 {
   text-shadow: 0 6px 32px #0006;
 }
 h1 span {
-  -webkit-text-stroke: 1px #d6e7f7;
-  color: transparent;
+  color: #ffcf64;
+  -webkit-text-stroke: 0;
+  text-shadow:
+    4px 4px 0 #bf3957,
+    0 6px 32px #0006;
 }
 h1 em {
   display: block;
@@ -188,7 +191,7 @@ h1 em {
     500 14px/1.5 "Hiragino Kaku Gothic ProN",
     sans-serif;
   letter-spacing: 0.65em;
-  color: #e2b896;
+  color: #ffe28d;
   margin: 20px 0 22px 7px;
 }
 .title-copy {
@@ -204,7 +207,7 @@ h1 em {
   margin-bottom: 24px;
 }
 .primary {
-  border: 1px solid #ff7779;
+  border: 1px solid #ffb4c4;
   background: var(--red);
   color: #0b0d13;
   min-height: 49px;
@@ -217,7 +220,9 @@ h1 em {
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.08em;
-  box-shadow: 0 0 30px #ff435116;
+  box-shadow:
+    4px 4px 0 #941e49,
+    0 0 30px #ff435130;
   transition:
     background 0.2s,
     transform 0.2s;
@@ -455,18 +460,19 @@ select {
   width: 37px;
   height: 46px;
   flex-shrink: 0;
-  background-image: url("assets/roster.png");
-  background-size: 600px 400px;
-  filter: saturate(0.6);
+  background-image: url("assets/portraits.svg#red-face");
+  background-size: cover;
+  background-position: center;
+  filter: saturate(0.9);
 }
 .red {
-  background-position: -95px -20px;
+  background-image: url("assets/portraits.svg#red-face");
 }
 .blue {
-  background-position: -278px -54px;
+  background-image: url("assets/portraits.svg#blue-face");
 }
 .gold {
-  background-position: -490px -35px;
+  background-image: url("assets/portraits.svg#gold-face");
 }
 .active .portrait {
   filter: saturate(1.1);
@@ -667,8 +673,9 @@ kbd {
 }
 .help-portrait {
   height: 95px;
-  background-image: url("assets/roster.png");
-  background-size: 768px 512px;
+  background-image: url("assets/portraits.svg#red-face");
+  background-size: cover;
+  background-position: center 38%;
   position: relative;
 }
 .help-portrait:after {
@@ -678,13 +685,13 @@ kbd {
   background: linear-gradient(0deg, #0d1825, transparent);
 }
 .help-portrait.red {
-  background-position: 0 -25px;
+  background-image: url("assets/portraits.svg#red-face");
 }
 .help-portrait.blue {
-  background-position: -258px -55px;
+  background-image: url("assets/portraits.svg#blue-face");
 }
 .help-portrait.gold {
-  background-position: -513px -35px;
+  background-image: url("assets/portraits.svg#gold-face");
 }
 .controls-table {
   border-top: 1px solid #576d8033;
@@ -1207,16 +1214,16 @@ kbd {
   }
   .help-portrait {
     height: 85px;
-    background-size: 600px 400px;
+    background-size: cover;
   }
   .help-portrait.red {
-    background-position: -65px -15px;
+    background-position: center;
   }
   .help-portrait.blue {
-    background-position: -249px -45px;
+    background-position: center;
   }
   .help-portrait.gold {
-    background-position: -438px -26px;
+    background-position: center;
   }
   .controls-table p {
     font-size: 10px;

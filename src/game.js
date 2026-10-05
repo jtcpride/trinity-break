@@ -80,6 +80,7 @@ export class Game {
         dashCooldown: 0,
         coyote: 0.12,
         jumpBuffer: 0,
+        jumpCutAvailable: false,
         safeX: 150,
         safeY: GROUND_Y,
       },
@@ -282,6 +283,7 @@ export class Game {
   updatePlayer(dt, input) {
     const s = this.state,
       p = s.player;
+    const wasGrounded = p.grounded;
     if (p.wire) {
       const wire = p.wire;
       wire.progress = Math.min(1, wire.progress + dt / wire.duration);
@@ -322,11 +324,18 @@ export class Game {
     else p.coyote = Math.max(0, p.coyote - dt);
     if (p.jumpBuffer > 0 && p.coyote > 0) {
       p.vy = -720;
+      p.jumpCutAvailable = true;
       p.grounded = false;
       p.coyote = 0;
       p.jumpBuffer = 0;
       this.burst(p.x, p.y, COLORS[p.character], 6, 90);
       this.emit("jump");
+    }
+    // Release trims the rising jump once. Legacy replay frames omit jumpHeld
+    // and retain their full jump arc; only an explicit release cuts height.
+    if (p.jumpCutAvailable && input.jumpHeld === false && p.vy < 0) {
+      p.vy = Math.max(p.vy, -280);
+      p.jumpCutAvailable = false;
     }
     if (input.dash && p.dashCooldown <= 0) {
       p.dashTime = p.character === 0 ? 0.2 : 0.24;
@@ -346,10 +355,9 @@ export class Game {
     const speed =
       p.character === 2 ? 330 + 240 * p.sprint : p.character === 0 ? 300 : 290;
     if (p.dashTime > 0) p.vx = p.facing * (p.character === 0 ? 760 : 660);
-    else {
-      const desired = move * speed;
-      p.vx += (desired - p.vx) * Math.min(1, dt * (p.grounded ? 15 : 9));
-    }
+    // Arcade movement responds on this frame, equally on ground and in air.
+    // GOLD's sprint still builds speed, while dash keeps its committed burst.
+    else p.vx = move * speed;
     const previousX = p.x,
       previousY = p.y;
     p.x = clamp(p.x + p.vx * dt, p.w / 2, s.world.width - p.w / 2);
@@ -421,11 +429,13 @@ export class Game {
         }
       }
     } else p.magnetic = false;
+    if (p.grounded || p.vy >= 0) p.jumpCutAvailable = false;
     if (p.grounded && !this.overGap(p.x, 55) && !this.closedGateNear(p.x)) {
       p.safeX = p.x;
       p.safeY = p.y;
     }
     if (p.y > 830) this.rescueFall();
+    else if (!wasGrounded && p.grounded) this.emit("land");
     if (input.attack) this.playerAttack();
   }
 

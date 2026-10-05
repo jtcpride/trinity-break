@@ -159,17 +159,17 @@ export class AudioEngine {
     switch (type) {
       case "shoot":
         this._tone(
-          event.character === 0 ? 160 : 300,
-          65,
-          0.09,
-          0.11,
+          event.character === 0 ? 760 : 920,
+          event.character === 0 ? 220 : 400,
+          0.065,
+          0.075,
           "triangle",
         );
-        this._noise(0.065, 0.11, 1600);
+        this._noise(0.025, 0.035, 1800);
         break;
       case "hit":
-        this._tone(120, 50, 0.1, 0.1, "triangle");
-        this._noise(0.07, 0.1, 850);
+        this._tone(420, 110, 0.07, 0.09, "triangle");
+        this._noise(0.035, 0.065, 1100);
         break;
       case "kill":
         this._tone(90, 32, 0.28, 0.2);
@@ -189,7 +189,10 @@ export class AudioEngine {
         this._noise(0.22, 0.1, 1400);
         break;
       case "jump":
-        this._tone(130, 240, 0.13, 0.09);
+        this._tone(260, 680, 0.105, 0.075, "triangle");
+        break;
+      case "land":
+        this._tone(180, 65, 0.045, 0.055, "triangle");
         break;
       case "dash":
         this._noise(0.17, 0.13, 900);
