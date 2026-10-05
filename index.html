@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#070b12" />
+    <title>TRINITY BREAK — 最後のシグナル</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <div class="game-frame" id="game-frame">
+        <canvas
+          id="game"
+          width="1280"
+          height="720"
+          aria-label="三人を切り替えて進む横スクロールアクションゲーム"
+        ></canvas>
+        <div id="hud" class="hud hidden">
+          <div class="hud-top">
+            <div class="vitals">
+              <div class="micro">
+                A.O.T.U. <span id="health-number">160 / 160</span>
+              </div>
+              <div class="health-track"><i id="health-fill"></i></div>
+              <div class="energy-line">
+                <span>ARMAROID</span>
+                <div class="energy-track"><i id="energy-fill"></i></div>
+                <b id="energy-number">35%</b>
+              </div>
+            </div>
+            <div class="mission">
+              <span class="micro" id="sector-label">01 / OUTER WALL</span
+              ><strong id="objective"></strong>
+              <div id="mission-progress"><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="hud-tools">
+              <button
+                id="mute"
+                title="音のオン・オフ"
+                aria-label="音をオフにする"
+              >
+                ♪</button
+              ><button id="pause" title="一時停止 (Esc)" aria-label="一時停止">
+                Ⅱ
+              </button>
+            </div>
+          </div>
+          <div class="transmission" id="transmission">
+            <span id="banner-title"></span>
+            <p id="banner-text"></p>
+          </div>
+          <div class="boss-panel hidden" id="boss-panel">
+            <div>
+              <span>WARDEN / 都市統制核</span><b id="boss-state">SHIELDED</b>
+            </div>
+            <div class="boss-track"><i id="boss-fill"></i></div>
+          </div>
+          <div class="possession hidden" id="possession">
+            <span>BLUE · 敵機を直接操作中</span><b id="possession-time">8.0s</b
+            ><small>移動で飛行 · 攻撃で中継器を破壊 · スキルで戻る</small>
+          </div>
+          <div class="hud-bottom">
+            <div class="squad" id="squad">
+              <button
+                class="sister active"
+                data-character="0"
+                aria-label="REDに切り替え"
+              >
+                <span class="portrait red"></span
+                ><span><b>RED</b><small>1 · 強襲</small></span
+                ><i class="cooldown"></i></button
+              ><button
+                class="sister"
+                data-character="1"
+                aria-label="BLUEに切り替え"
+              >
+                <span class="portrait blue"></span
+                ><span><b>BLUE</b><small>2 · 侵入</small></span
+                ><i class="cooldown"></i></button
+              ><button
+                class="sister"
+                data-character="2"
+                aria-label="GOLDに切り替え"
+              >
+                <span class="portrait gold"></span
+                ><span><b>GOLD</b><small>3 · 機動</small></span
+                ><i class="cooldown"></i>
+              </button>
+            </div>
+            <div class="keyboard-help">
+              <span><kbd>A</kbd><kbd>D</kbd> 移動</span
+              ><span><kbd>Space</kbd> 跳躍</span><span><kbd>J</kbd> 攻撃</span
+              ><span><kbd>K</kbd> 固有技</span><span><kbd>Shift</kbd> 加速</span
+              ><span><kbd>R</kbd> 無敵化</span>
+            </div>
+            <button
+              id="armor-button"
+              class="armor-button"
+              aria-label="アーマロイドモードを発動"
+            >
+              <span>ARMAROID</span><small>100%で発動 / R</small>
+            </button>
+          </div>
+          <div id="context-hint" class="context-hint"></div>
+          <div class="touch-controls" id="touch-controls">
+            <div class="touch-direction">
+              <button data-action="left" aria-label="左へ移動">◀</button
+              ><button data-action="right" aria-label="右へ移動">▶</button
+              ><button
+                data-action="up"
+                class="touch-up"
+                aria-label="敵機を上へ"
+              >
+                ▲</button
+              ><button
+                data-action="down"
+                class="touch-down"
+                aria-label="敵機を下へ"
+              >
+                ▼
+              </button>
+            </div>
+            <div class="touch-actions">
+              <button data-action="dash" class="touch-dash">加速</button
+              ><button data-action="jump">跳躍</button
+              ><button data-action="skill" class="touch-skill">固有技</button
+              ><button data-action="attack" class="touch-attack">攻撃</button>
+            </div>
+          </div>
+        </div>
+        <section id="title-screen" class="screen title-screen">
+          <div class="title-grid"></div>
+          <div class="title-art">
+            <div class="art-panel art-red"></div>
+            <div class="art-panel art-blue"></div>
+            <div class="art-panel art-gold"></div>
+            <div class="art-label">
+              <span>01 / RED</span><span>02 / BLUE</span><span>03 / GOLD</span>
+            </div>
+          </div>
+          <div class="title-content">
+            <div class="eyebrow"><i></i>A.O.T.U. OPERATIONS / 001</div>
+            <h1>TRINITY<br /><span>BREAK</span><em>最後のシグナル</em></h1>
+            <p class="title-copy">三つの力で、夜明けを奪い返せ。</p>
+            <p class="synopsis">
+              軌道都市を支配する統制AI〈WARDEN〉。<br />再起動まで、あと一夜。三姉妹は最後の制御塔へ。
+            </p>
+            <button class="primary" id="start-button">
+              ミッション開始 <span>↗</span>
+            </button>
+            <div class="title-settings">
+              <label
+                >作戦難度
+                <select id="difficulty">
+                  <option value="standard">STANDARD</option>
+                  <option value="assist">ASSIST · ダメージ軽減</option>
+                </select></label
+              ><button id="instructions-button" class="text-button">
+                操作・三人の能力 ↗
+              </button>
+            </div>
+            <p class="save-note" id="save-note">
+              4区画のショートミッション · チェックポイントから再挑戦
+            </p>
+          </div>
+          <div class="title-footer">
+            <span>THREE SISTERS. ONE LAST SIGNAL.</span
+            ><span>LOCAL EDITION / 1.0</span>
+          </div>
+        </section>
+        <section id="help-screen" class="screen modal-screen hidden">
+          <div class="modal help-modal">
+            <span class="eyebrow">FIELD MANUAL</span>
+            <h2>切り替えるほど、強くなる。</h2>
+            <div class="help-characters">
+              <article>
+                <div class="help-portrait red"></div>
+                <h3>RED <small>突破する</small></h3>
+                <p>
+                  近距離は斬撃、遠距離は射撃。固有技で近接ブレイク。加速を繰り返し空中でもブースト噴射。
+                </p>
+              </article>
+              <article>
+                <div class="help-portrait blue"></div>
+                <h3>BLUE <small>書き換える</small></h3>
+                <p>
+                  固有技で敵機を8秒間操作。移動と攻撃で中継器を狙う。ボスのシールドにも侵入できる。
+                </p>
+              </article>
+              <article>
+                <div class="help-portrait gold"></div>
+                <h3>GOLD <small>すり抜ける</small></h3>
+                <p>
+                  加速を押し続けてスプリント。固有技で大型敵へワイヤーを掛け、地形も攻撃も飛び越える。
+                </p>
+              </article>
+            </div>
+            <div class="controls-table">
+              <p>
+                <kbd>A / D</kbd> または <kbd>← / →</kbd> 移動
+                <kbd>Space</kbd> ジャンプ <kbd>J</kbd> 攻撃（長押し可）
+              </p>
+              <p>
+                <kbd>K</kbd> 固有技 <kbd>Shift / L</kbd> 加速
+                <kbd>1 / 2 / 3</kbd> 切替 <kbd>Q</kbd> 次の姉妹
+              </p>
+              <p>
+                <kbd>R</kbd> ARMAROID：ゲージ100%で7秒無敵
+                <kbd>Esc</kbd> 一時停止
+              </p>
+              <p>
+                敵機操作中は <kbd>W / S</kbd> または
+                <kbd>↑ / ↓</kbd> で上下移動。タッチは画面のボタンで操作。
+              </p>
+            </div>
+            <button class="primary" id="help-close">了解 <span>→</span></button>
+          </div>
+        </section>
+        <section id="pause-screen" class="screen modal-screen hidden">
+          <div class="modal compact">
+            <span class="eyebrow">SIGNAL ON HOLD</span>
+            <h2>作戦を一時停止</h2>
+            <p>いつでも、三人の続きから。</p>
+            <button class="primary" id="resume-button">
+              作戦を続ける <span>→</span></button
+            ><button class="secondary" id="pause-help">操作を確認</button
+            ><button class="text-button" id="return-title">
+              タイトルへ戻る
+            </button>
+          </div>
+        </section>
+        <section id="result-screen" class="screen modal-screen hidden">
+          <div class="modal result-modal">
+            <span class="eyebrow" id="result-eyebrow">SIGNAL LOST</span>
+            <h2 id="result-title">接続が途絶えた。</h2>
+            <p id="result-story"></p>
+            <div class="result-stats" id="result-stats"></div>
+            <p class="result-note" id="result-note"></p>
+            <button class="primary" id="retry-button">
+              チェックポイントから再挑戦 <span>↗</span></button
+            ><button class="secondary" id="result-title-button">
+              タイトルへ
+            </button>
+          </div>
+        </section>
+      </div>
+      <p class="orientation-note">
+        横向きにすると、街と操作ボタンが広く見えます。
+      </p>
+    </main>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
