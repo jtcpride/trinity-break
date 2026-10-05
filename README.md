@@ -1,5 +1,7 @@
 # TRINITY BREAK — 最後のシグナル
 
+**[ゲームを遊ぶ](https://jtcpride.github.io/trinity-break/)**
+
 RED・BLUE・GOLDを切り替えて軌道都市ノクスの制御塔へ挑む、4区画の短編SFアクション。
 
 PC：A/Dまたは左右矢印で移動、Spaceでジャンプ、Jで攻撃、Kで固有技、Shift/Lで加速、1/2/3で切替、RでARMAROID、Escで一時停止。
